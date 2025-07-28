@@ -1,0 +1,6 @@
+google-genai
+python-dotenv
+Pillow
+gradio_client   
+pyautogui
+pynput
