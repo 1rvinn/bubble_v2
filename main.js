@@ -221,6 +221,30 @@ app.whenReady().then(() => {
     }
   });
 
+  // Register global shortcut (Ctrl+Shift+0) - Take new screenshot and process
+  globalShortcut.register('CommandOrControl+Shift+0', async () => {
+    console.log('Global shortcut Ctrl+Shift+0 triggered');
+    
+    try {
+      // Show the window if it's hidden
+      if (!win.isVisible()) {
+        win.show();
+        win.focus();
+        
+        // Small delay to ensure window is properly focused
+        setTimeout(() => {
+          win.webContents.send('trigger-new-screenshot');
+        }, 200);
+      } else {
+        // Window is already visible, trigger immediately
+        win.webContents.send('trigger-new-screenshot');
+      }
+      
+    } catch (error) {
+      console.error('Error handling global screenshot shortcut:', error);
+    }
+  });
+
   // IPC handler for screenshot (window only)
   ipcMain.handle('take-screenshot', async () => {
     const image = await win.capturePage();

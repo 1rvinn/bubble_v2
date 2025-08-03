@@ -210,6 +210,12 @@ class BubbleApp {
         ipcRenderer.on('show-prompt-after-screenshot', () => {
             this.showPromptAfterScreenshot();
         });
+        
+        // Listen for global shortcut trigger
+        ipcRenderer.on('trigger-new-screenshot', () => {
+            console.log('Received trigger-new-screenshot from main process');
+            this.handleClearAndRescreenshot();
+        });
     }
 
     setupCanvas() {
@@ -639,19 +645,7 @@ class BubbleApp {
     }
 
     handleKeyboardShortcuts(e) {
-        // Ctrl+Shift+0 - Clear highlighting and take new screenshot
-        if (e.ctrlKey && e.shiftKey && e.key === '0') {
-            e.preventDefault();
-            
-            // Debounce rapid key presses
-            if (this.lastKeyPress && Date.now() - this.lastKeyPress < 1000) {
-                console.log('Key press debounced');
-                return;
-            }
-            this.lastKeyPress = Date.now();
-            
-            this.handleClearAndRescreenshot();
-        }
+        // Ctrl+Shift+0 is now handled globally by main.js
         
         // Ctrl+Shift+G - Toggle app visibility (handled by main.js)
         if (e.ctrlKey && e.shiftKey && e.key === 'G') {
@@ -686,6 +680,12 @@ class BubbleApp {
         console.log('Starting new screenshot workflow...');
         this.clearHighlightingBoxes();
         this.showStatusMessage('Taking new screenshot...', 'info');
+        
+        // For global shortcut, we need to handle the case where there's no current prompt
+        if (!this.currentPrompt || this.currentPrompt.trim() === '') {
+            // Use a default prompt for global shortcut
+            this.currentPrompt = 'Analyze this screenshot and identify all interactive elements';
+        }
         
         // Start new workflow - prompt box should remain hidden
         this.isProcessing = true;
