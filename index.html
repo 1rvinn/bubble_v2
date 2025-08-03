@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble v2</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Main Prompt Bar -->
+        <div class="prompt-container" id="promptContainer">
+            <div class="prompt-bar" id="promptBar">
+                <div class="input-section">
+                    <input type="text" 
+                           id="promptInput" 
+                           placeholder="Ask anything" 
+                           class="prompt-input"
+                           autocomplete="off">
+                </div>
+                <div class="action-buttons">
+                    <button class="action-btn submit-btn" id="submitBtn" title="Submit">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                    <button class="action-btn settings-btn" id="settingsBtn" title="Settings">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6"/>
+                            <path d="M3.6 3.6l4.2 4.2m8.4 8.4l4.2 4.2"/>
+                            <path d="M20.4 3.6l-4.2 4.2m-8.4 8.4l-4.2 4.2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full-screen border overlay -->
+        <div class="fullscreen-border" id="fullscreenBorder"></div>
+
+        <!-- Overlay for highlighting boxes -->
+        <div class="overlay-container" id="overlayContainer">
+            <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
+        </div>
+
+        <!-- Loading indicator -->
+        <div class="loading-indicator" id="loadingIndicator">
+            <div class="loading-spinner"></div>
+            <span class="loading-text">Processing...</span>
+        </div>
+
+        <!-- Status messages -->
+        <div class="status-message" id="statusMessage"></div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

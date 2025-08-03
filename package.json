@@ -1,0 +1,15 @@
+{
+  "name": "bubble_v2",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "1rvinn",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "electron": "^37.2.4"
+  }
+}

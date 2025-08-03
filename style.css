@@ -1,0 +1,492 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: transparent;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* App container */
+.app-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    pointer-events: none;
+    padding-top: 20px;
+}
+
+/* Main prompt container */
+.prompt-container {
+    position: relative;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    pointer-events: auto;
+}
+
+/* Prompt bar - main glasmorphic element */
+.prompt-bar {
+    display: flex;
+    align-items: center;
+    background: rgba(45, 48, 53, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(74, 77, 82, 0.3);
+    border-radius: 50px;
+    padding: 12px 16px;
+    box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.1);
+    min-width: 400px;
+    max-width: 600px;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1001;
+}
+
+/* Input section */
+.input-section {
+    flex: 1;
+    margin-right: 12px;
+}
+
+.prompt-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    border: none;
+    border-radius: 25px;
+    padding: 14px 20px;
+    font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    color: #333;
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.prompt-input::placeholder {
+    color: #B0B0B0;
+    font-weight: 400;
+}
+
+.prompt-input:focus {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.action-btn {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    outline: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+}
+
+.action-btn:active {
+    transform: scale(0.95);
+}
+
+.action-btn svg {
+    transition: all 0.2s ease;
+}
+
+.submit-btn:hover svg {
+    transform: translateX(2px);
+}
+
+/* Full-screen expansion animation for screenshot */
+.prompt-bar.expanding {
+    animation: expandToFullScreen 0.5s ease-out forwards;
+}
+
+.prompt-bar.contracting {
+    animation: contractToOriginal 0.4s ease-in forwards;
+}
+
+/* Full-screen border overlay */
+.fullscreen-border {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 998;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.fullscreen-border::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 10px solid;
+    border-radius: 15px;
+    background: transparent;
+    animation: borderRotate 3s linear infinite, borderGlow 2s ease-in-out infinite alternate;
+    backdrop-filter: blur(2px);
+    mix-blend-mode: screen;
+    opacity: 0.8;
+}
+
+.fullscreen-border::after {
+    content: '';
+    position: absolute;
+    top: -15px;
+    left: -15px;
+    right: -15px;
+    bottom: -15px;
+    border-radius: 15px;
+    background: radial-gradient(ellipse at 50% 50%, 
+        rgba(255, 255, 255, 0.05) 0%, 
+        transparent 50%);
+    animation: borderGlow 2s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* Hide prompt box during processing */
+.prompt-container.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+@keyframes expandToFullScreen {
+    0% {
+        transform: scale(1);
+        border-color: rgba(74, 77, 82, 0.3);
+    }
+    50% {
+        transform: scale(1.5);
+        border-color: rgba(255, 0, 128, 0.8);
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.3),
+            0 0 0 1px rgba(255, 255, 255, 0.1),
+            0 0 30px rgba(255, 0, 128, 0.5);
+    }
+    100% {
+        transform: scale(3);
+        border-color: rgba(255, 0, 128, 0.8);
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.3),
+            0 0 0 1px rgba(255, 255, 255, 0.1),
+            0 0 50px rgba(255, 0, 128, 0.7);
+    }
+}
+
+@keyframes contractToOriginal {
+    0% {
+        transform: scale(3);
+        border-color: rgba(255, 0, 128, 0.8);
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.3),
+            0 0 0 1px rgba(255, 255, 255, 0.1),
+            0 0 50px rgba(255, 0, 128, 0.7);
+    }
+    100% {
+        transform: scale(1);
+        border-color: rgba(74, 77, 82, 0.3);
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.3),
+            0 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+}
+
+@keyframes borderRotate {
+    0% {
+        border-color: rgba(255, 0, 128, 0.3);
+        box-shadow: 
+            0 0 8px rgba(255, 0, 128, 0.2),
+            0 0 16px rgba(255, 0, 128, 0.1),
+            0 0 24px rgba(255, 0, 128, 0.05);
+    }
+    12.5% {
+        border-color: rgba(255, 64, 128, 0.3);
+        box-shadow: 
+            0 0 8px rgba(255, 64, 128, 0.2),
+            0 0 16px rgba(255, 64, 128, 0.1),
+            0 0 24px rgba(255, 64, 128, 0.05);
+    }
+    25% {
+        border-color: rgba(128, 0, 255, 0.3);
+        box-shadow: 
+            0 0 8px rgba(128, 0, 255, 0.2),
+            0 0 16px rgba(128, 0, 255, 0.1),
+            0 0 24px rgba(128, 0, 255, 0.05);
+    }
+    37.5% {
+        border-color: rgba(0, 128, 255, 0.3);
+        box-shadow: 
+            0 0 8px rgba(0, 128, 255, 0.2),
+            0 0 16px rgba(0, 128, 255, 0.1),
+            0 0 24px rgba(0, 128, 255, 0.05);
+    }
+    50% {
+        border-color: rgba(0, 255, 255, 0.3);
+        box-shadow: 
+            0 0 8px rgba(0, 255, 255, 0.2),
+            0 0 16px rgba(0, 255, 255, 0.1),
+            0 0 24px rgba(0, 255, 255, 0.05);
+    }
+    62.5% {
+        border-color: rgba(0, 255, 128, 0.3);
+        box-shadow: 
+            0 0 8px rgba(0, 255, 128, 0.2),
+            0 0 16px rgba(0, 255, 128, 0.1),
+            0 0 24px rgba(0, 255, 128, 0.05);
+    }
+    75% {
+        border-color: rgba(255, 255, 0, 0.3);
+        box-shadow: 
+            0 0 8px rgba(255, 255, 0, 0.2),
+            0 0 16px rgba(255, 255, 0, 0.1),
+            0 0 24px rgba(255, 255, 0, 0.05);
+    }
+    87.5% {
+        border-color: rgba(255, 128, 0, 0.3);
+        box-shadow: 
+            0 0 8px rgba(255, 128, 0, 0.2),
+            0 0 16px rgba(255, 128, 0, 0.1),
+            0 0 24px rgba(255, 128, 0, 0.05);
+    }
+    100% {
+        border-color: rgba(255, 0, 128, 0.3);
+        box-shadow: 
+            0 0 8px rgba(255, 0, 128, 0.2),
+            0 0 16px rgba(255, 0, 128, 0.1),
+            0 0 24px rgba(255, 0, 128, 0.05);
+    }
+}
+
+@keyframes borderGlow {
+    0% {
+        filter: brightness(1) blur(0px);
+        backdrop-filter: blur(2px);
+        opacity: 0.8;
+    }
+    100% {
+        filter: brightness(1.2) blur(1px);
+        backdrop-filter: blur(4px);
+        opacity: 1;
+    }
+}
+
+/* Overlay for highlighting boxes */
+.overlay-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 999;
+    transform: none;
+}
+
+.overlay-canvas {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: block;
+}
+
+/* Loading indicator */
+.loading-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 20px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    z-index: 2000;
+    color: white;
+    font-size: 14px;
+}
+
+.loading-indicator.show {
+    display: flex;
+}
+
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Status messages */
+.status-message {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 2000;
+}
+
+.status-message.show {
+    opacity: 1;
+}
+
+.status-message.task {
+    background: rgba(0, 128, 255, 0.9);
+    border-left: 4px solid #0066cc;
+    font-weight: 500;
+}
+
+.status-message.step {
+    background: rgba(128, 0, 255, 0.9);
+    border-left: 4px solid #6600cc;
+    font-weight: 600;
+    font-size: 16px;
+    padding: 16px 24px;
+    box-shadow: 0 4px 12px rgba(128, 0, 255, 0.3);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .app-container {
+        padding-top: 15px;
+    }
+    
+    .prompt-bar {
+        min-width: 300px;
+        max-width: 90vw;
+        padding: 10px 14px;
+    }
+    
+    .prompt-input {
+        font-size: 14px;
+        padding: 12px 18px;
+    }
+    
+    .action-btn {
+        width: 36px;
+        height: 36px;
+    }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .prompt-bar {
+        transform: scale(1.1);
+    }
+}
+
+/* Ultra-wide screens */
+@media (min-width: 2560px) {
+    .prompt-bar {
+        min-width: 600px;
+        max-width: 800px;
+    }
+}
+
+/* Small screens */
+@media (max-width: 480px) {
+    .app-container {
+        padding-top: 10px;
+    }
+    
+    .prompt-bar {
+        min-width: 280px;
+        max-width: 95vw;
+        padding: 8px 12px;
+    }
+    
+    .prompt-input {
+        font-size: 12px;
+        padding: 10px 14px;
+    }
+    
+    .action-btn {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* Hide elements during screenshot */
+.screenshot-mode {
+    opacity: 0.1;
+    pointer-events: none;
+}
+
+/* Clickthrough mode styles */
+.clickthrough-mode .prompt-container {
+    pointer-events: none;
+}
+
+.clickthrough-mode .prompt-container input:focus {
+    pointer-events: auto;
+}
+
+/* Ensure interface stays visible during clickthrough */
+.clickthrough-mode {
+    opacity: 1 !important;
+}
+
+/* Focus styles for accessibility */
+.prompt-input:focus-visible {
+    outline: 2px solid rgba(102, 126, 234, 0.5);
+    outline-offset: 2px;
+}
+
+.action-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
+}

@@ -78,7 +78,7 @@ def parse_element_string(element_string: str) -> List[Dict[str, Any]]:
 
 def create_input(prompt: str, screenshot_base64: str):
     image = Image.open(io.BytesIO(base64.b64decode(screenshot_base64)))
-    image.show()
+    # image.show()
     buffered = io.BytesIO()
     image.save(buffered, format="PNG")
     img_bytes = buffered.getvalue()
