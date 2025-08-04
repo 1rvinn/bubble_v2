@@ -52,6 +52,9 @@ class BubbleApp {
         window.addEventListener('resize', () => this.handleResize());
         window.addEventListener('orientationchange', () => this.handleResize());
 
+        // Click event to clear bounding boxes
+        document.addEventListener('click', (e) => this.handleClick(e));
+
         // Enable clickthrough for non-interactive elements
         this.setupClickthrough();
 
@@ -166,6 +169,17 @@ class BubbleApp {
         }
     }
     
+    handleClick(e) {
+        // Don't clear boxes if clicking on the prompt container (input, buttons, etc.)
+        if (e.target.closest('.prompt-container')) {
+            return;
+        }
+        
+        // Clear bounding boxes and task descriptions
+        console.log('Click detected - clearing bounding boxes and descriptions');
+        this.clearHighlightingBoxes();
+    }
+    
     cleanup() {
         console.log('Cleaning up resources...');
         this.clearCanvas();
@@ -237,6 +251,12 @@ class BubbleApp {
         ipcRenderer.on('trigger-new-screenshot', () => {
             console.log('Received trigger-new-screenshot from main process');
             this.handleClearAndRescreenshot();
+        });
+        
+        // Listen for clear highlighting command
+        ipcRenderer.on('clear-highlighting', () => {
+            console.log('Received clear-highlighting command from main process');
+            this.clearHighlightingBoxes();
         });
     }
 

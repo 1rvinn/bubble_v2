@@ -56,9 +56,28 @@ def process_screenshot_request(screenshot_path, prompt):
         # Call Omni API
         omni_start = time.time()
         print(f"[BACKEND TIMING] Starting Omni API call at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        screenshot_b64, element_string = omni_api(screenshot_b64)
+        omni_result = omni_api(screenshot_b64)
         omni_end = time.time()
         print(f"[BACKEND TIMING] Omni API processing completed in: {(omni_end - omni_start) * 1000:.2f}ms")
+        
+        # Check if Omni API call was successful
+        if omni_result is None:
+            error_msg = "Omni API failed completely"
+            backend_end_time = time.time()
+            total_backend_time = (backend_end_time - backend_start_time) * 1000
+            print(f"[BACKEND TIMING] Backend processing failed after: {total_backend_time:.2f}ms")
+            return {
+                "status": "error",
+                "message": f"Omni API error: {error_msg}",
+                "highlighting_boxes": []
+            }
+        
+        # Extract screenshot_b64 and element_string from result
+        if isinstance(omni_result, tuple) and len(omni_result) == 2:
+            screenshot_b64, element_string = omni_result
+        else:
+            # Handle case where result might be in different format
+            element_string = omni_result
         
         # Select element
         element_select_start = time.time()

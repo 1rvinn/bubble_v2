@@ -13,31 +13,37 @@ let pythonProcess = null;
 let clickthroughEnabled = false;
 
 function createWindow() {
-  // Get primary display bounds for better multi-monitor support
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;
-  
+
+  // Hide dock on macOS
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.hide();
+  }
+
   win = new BrowserWindow({
     width: width,
     height: height,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    skipTaskbar: true, // Hidden from taskbar
     hasShadow: false,
     focusable: true,
+    backgroundColor: '#00000000', // Fully transparent
+    hiddenInMissionControl: true, // macOS only, Electron 25+
     webPreferences: { 
       nodeIntegration: true, 
       contextIsolation: false,
       enableRemoteModule: true
     }
   });
-  
-  // Set window to ignore mouse events by default (clickthrough enabled)
+
+  // Makes window click-through - user can interact with content behind it
   win.setIgnoreMouseEvents(true, { forward: true });
   clickthroughEnabled = true;
-  
+
   // Suppress DevTools warnings
   win.webContents.on('console-message', (event, level, message, line, sourceId) => {
     if (message.includes('Autofill.enable') || message.includes('SharedImageManager')) {
@@ -45,10 +51,10 @@ function createWindow() {
     }
   });
   win.loadFile('index.html');
-  
+
   // Hide window initially
   win.hide();
-  
+
   // Close window when it loses focus (only when not in clickthrough mode)
   win.on('blur', () => {
     console.log('Window blur event triggered, clickthrough enabled:', clickthroughEnabled);
@@ -59,9 +65,11 @@ function createWindow() {
       console.log('Keeping window visible due to clickthrough mode - clicks will pass through');
       // When clickthrough is enabled, keep the window visible and let clicks pass through
       // Don't hide the window - this ensures the overlay stays visible
+      // Clear bounding boxes when user clicks through
+      win.webContents.send('clear-highlighting');
     }
   });
-  
+
   // Debug focus events
   win.on('focus', () => {
     console.log('Window focus event triggered');
@@ -132,7 +140,7 @@ async function processScreenshotWithBackend(screenshotPath, prompt) {
     const timeout = setTimeout(() => {
       console.error('Backend processing timeout');
       reject(new Error('Backend processing timeout'));
-    }, 30000); // 30 second timeout
+    }, 90000); // 90 second timeout
 
     // Listen for response
     let responseBuffer = '';
