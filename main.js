@@ -56,8 +56,9 @@ function createWindow() {
       console.log('Hiding window due to blur (clickthrough disabled)');
       win.hide();
     } else {
-      console.log('Keeping window visible due to clickthrough mode');
-      // When clickthrough is enabled, don't hide the window
+      console.log('Keeping window visible due to clickthrough mode - clicks will pass through');
+      // When clickthrough is enabled, keep the window visible and let clicks pass through
+      // Don't hide the window - this ensures the overlay stays visible
     }
   });
   
@@ -180,6 +181,10 @@ app.whenReady().then(() => {
     } else {
       win.show();
       win.focus();
+      // Ensure clickthrough is enabled when showing the window
+      clickthroughEnabled = true;
+      win.setIgnoreMouseEvents(true, { forward: true });
+      win.webContents.send('clickthrough-enabled');
       // Send message to renderer to focus input with a small delay
       setTimeout(() => {
         win.webContents.send('focus-input');
@@ -218,6 +223,14 @@ app.whenReady().then(() => {
         win.webContents.send('clickthrough-disabled');
         console.log('Mouse events now captured by this window');
       }
+    } else {
+      // If window is not visible, show it and enable clickthrough
+      win.show();
+      win.focus();
+      clickthroughEnabled = true;
+      win.setIgnoreMouseEvents(true, { forward: true });
+      win.webContents.send('clickthrough-enabled');
+      console.log('Window shown and clickthrough enabled');
     }
   });
 
@@ -297,7 +310,7 @@ app.whenReady().then(() => {
       const { screenshotPath, prompt } = data;
       
       // Send processing status to frontend
-      win.webContents.send('processing-status', 'Processing screenshot...');
+      win.webContents.send('processing-status', 'Thinking...');
       
       const result = await processScreenshotWithBackend(screenshotPath, prompt);
       
@@ -323,6 +336,10 @@ app.whenReady().then(() => {
     const primaryDisplay = screen.getPrimaryDisplay();
     const allDisplays = screen.getAllDisplays();
     
+    // Get the actual window bounds
+    const windowBounds = win.getBounds();
+    const windowContentBounds = win.getContentBounds();
+    
     return {
       primary: {
         size: primaryDisplay.size,
@@ -335,7 +352,13 @@ app.whenReady().then(() => {
         workArea: display.workArea,
         bounds: display.bounds,
         scaleFactor: display.scaleFactor
-      }))
+      })),
+      window: {
+        bounds: windowBounds,
+        contentBounds: windowContentBounds,
+        isFullScreen: win.isFullScreen(),
+        isMaximized: win.isMaximized()
+      }
     };
   });
   
@@ -345,6 +368,11 @@ app.whenReady().then(() => {
     console.log('IPC: Clickthrough mode:', clickthroughEnabled ? 'enabled' : 'disabled');
     
     if (clickthroughEnabled) {
+      // Ensure window is visible and clickthrough is enabled
+      if (!win.isVisible()) {
+        win.show();
+        win.focus();
+      }
       win.setIgnoreMouseEvents(true, { forward: true });
       win.webContents.send('clickthrough-enabled');
       console.log('IPC: Mouse events now pass through to underlying windows');

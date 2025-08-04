@@ -11,6 +11,7 @@ class BubbleApp {
         this.lastKeyPress = null;
         this.initialPromptEntered = false;
         this.promptBoxShown = false;
+        this.workflowStartTime = null; // Add timing variable
     }
 
     initializeElements() {
@@ -69,11 +70,21 @@ class BubbleApp {
         // Track clickthrough state - enabled by default
         this.clickthroughEnabled = true;
         document.body.classList.add('clickthrough-mode');
+        
+        console.log('Renderer: Initial clickthrough setup complete');
     }
     
     enableClickthrough() {
         this.clickthroughEnabled = true;
         document.body.classList.add('clickthrough-mode');
+        
+        // Ensure overlay elements are clickthrough
+        this.overlayContainer.style.pointerEvents = 'none';
+        this.fullscreenBorder.style.pointerEvents = 'none';
+        
+        // Allow interaction with prompt container
+        this.promptContainer.style.pointerEvents = 'auto';
+        
         console.log('Renderer: Clickthrough enabled');
         this.showStatusMessage('Clickthrough enabled - Use Cmd+Shift+F to focus input, Cmd+/ to submit', 'info');
     }
@@ -81,6 +92,12 @@ class BubbleApp {
     disableClickthrough() {
         this.clickthroughEnabled = false;
         document.body.classList.remove('clickthrough-mode');
+        
+        // Allow interaction with all elements when clickthrough is disabled
+        this.overlayContainer.style.pointerEvents = 'auto';
+        this.fullscreenBorder.style.pointerEvents = 'auto';
+        this.promptContainer.style.pointerEvents = 'auto';
+        
         console.log('Renderer: Clickthrough disabled');
         this.showStatusMessage('Clickthrough disabled', 'info');
     }
@@ -91,12 +108,12 @@ class BubbleApp {
             if (!this.initialPromptEntered && !this.promptBoxShown) {
                 this.showPromptBox();
                 this.promptBoxShown = true;
+                this.showStatusMessage('Input focused - Type your prompt', 'info');
+            } else {
+                this.promptInput.focus();
+                this.promptInput.select();
+                console.log('Input focused and text selected');
             }
-            
-            this.promptInput.focus();
-            this.promptInput.select();
-            console.log('Input focused and text selected');
-            this.showStatusMessage('Input focused - Type your prompt', 'info');
         } else {
             console.warn('Prompt input element not found');
         }
@@ -188,6 +205,11 @@ class BubbleApp {
             this.focusInput();
         });
         
+        // Ensure clickthrough is enabled when window is shown
+        ipcRenderer.on('clickthrough-enabled', () => {
+            this.enableClickthrough();
+        });
+        
         // Listen for submit prompt command
         ipcRenderer.on('submit-prompt', () => {
             this.handleSubmit();
@@ -242,6 +264,14 @@ class BubbleApp {
                 console.log('Using Electron display dimensions:', { width: this.screenWidth, height: this.screenHeight });
             }
             
+            // Store window bounds for coordinate calculations
+            if (displayInfo.window) {
+                this.windowBounds = displayInfo.window.bounds;
+                this.windowContentBounds = displayInfo.window.contentBounds;
+                console.log('Window bounds:', this.windowBounds);
+                console.log('Window content bounds:', this.windowContentBounds);
+            }
+            
             return displayInfo;
         } catch (error) {
             console.log('Could not get display info from Electron, using window.screen');
@@ -274,6 +304,11 @@ class BubbleApp {
         this.viewportWidth = viewportWidth;
         this.viewportHeight = viewportHeight;
         
+        // Update window bounds if not already set
+        if (!this.windowBounds) {
+            this.getDisplayInfo();
+        }
+        
         console.log('Canvas resized to:', {
             width: this.overlayCanvas.width,
             height: this.overlayCanvas.height,
@@ -288,6 +323,10 @@ class BubbleApp {
     handleSubmit() {
         const prompt = this.promptInput.value.trim();
         if (!prompt || this.isProcessing) return;
+
+        // Start timing for the entire workflow
+        this.workflowStartTime = Date.now();
+        console.log(`[TIMING] Workflow started at: ${new Date(this.workflowStartTime).toISOString()}`);
 
         this.currentPrompt = prompt;
         this.initialPromptEntered = true;
@@ -305,6 +344,12 @@ class BubbleApp {
 
     async startScreenshotWorkflow() {
         try {
+            const workflowStepTime = Date.now();
+            console.log(`[TIMING] Screenshot workflow started at: ${new Date(workflowStepTime).toISOString()}`);
+            if (this.workflowStartTime) {
+                console.log(`[TIMING] Time since workflow start: ${workflowStepTime - this.workflowStartTime}ms`);
+            }
+
             // Step 1: Hide prompt box during processing
             this.hidePromptBox();
             
@@ -314,17 +359,25 @@ class BubbleApp {
             // Step 3: Border is always visible now
             
             // Step 4: Take screenshot (prompt will be hidden by main process)
+            const screenshotStartTime = Date.now();
+            console.log(`[TIMING] Taking screenshot at: ${new Date(screenshotStartTime).toISOString()}`);
             const screenshotPath = await this.takeScreenshot();
+            const screenshotEndTime = Date.now();
+            console.log(`[TIMING] Screenshot completed in: ${screenshotEndTime - screenshotStartTime}ms`);
             
             // Step 5: Send to backend (border stays visible during processing)
+            const backendStartTime = Date.now();
+            console.log(`[TIMING] Sending to backend at: ${new Date(backendStartTime).toISOString()}`);
             await this.sendToBackend(screenshotPath);
+            const backendEndTime = Date.now();
+            console.log(`[TIMING] Backend processing completed in: ${backendEndTime - backendStartTime}ms`);
             
             // Step 6: Contract animation (border remains visible)
             await this.contractAfterScreenshot();
             
         } catch (error) {
             console.error('Screenshot workflow error:', error);
-            this.showStatusMessage('Failed to process screenshot', 'error');
+            this.showStatusMessage('Failed to process request', 'error');
             this.showLoading(false);
             this.isProcessing = false;
         }
@@ -374,7 +427,7 @@ class BubbleApp {
             const screenshotPath = await ipcRenderer.invoke('hide-and-screenshot');
             return screenshotPath;
         } catch (error) {
-            throw new Error('Screenshot failed: ' + error.message);
+            throw new Error('Failed to capture screen: ' + error.message);
         }
     }
 
@@ -386,13 +439,19 @@ class BubbleApp {
             });
             return result;
         } catch (error) {
-            throw new Error('Backend processing failed: ' + error.message);
+            throw new Error('Processing failed: ' + error.message);
         }
     }
 
     async handleBackendResult(data) {
         this.showLoading(false);
         this.isProcessing = false;
+
+        const resultTime = Date.now();
+        console.log(`[TIMING] Backend result received at: ${new Date(resultTime).toISOString()}`);
+        if (this.workflowStartTime) {
+            console.log(`[TIMING] Total time from workflow start to result: ${resultTime - this.workflowStartTime}ms`);
+        }
 
         console.log('Backend result received:', data);
         console.log('Data type:', typeof data);
@@ -422,13 +481,24 @@ class BubbleApp {
             }
             
             // Animate border shrinking to bounding boxes
+            const drawStartTime = Date.now();
+            console.log(`[TIMING] Starting to draw bounding boxes at: ${new Date(drawStartTime).toISOString()}`);
             await this.animateBorderToBoxes(boxes, stepInfo);
+            const drawEndTime = Date.now();
+            console.log(`[TIMING] Bounding boxes drawn in: ${drawEndTime - drawStartTime}ms`);
             
-            this.showStatusMessage(`Found ${boxes.length} elements`, 'success');
+            // Final timing summary
+            if (this.workflowStartTime) {
+                const totalTime = drawEndTime - this.workflowStartTime;
+                console.log(`[TIMING] TOTAL TIME from prompt/trigger to bounding box drawn: ${totalTime}ms`);
+                console.log(`[TIMING] Workflow completed at: ${new Date(drawEndTime).toISOString()}`);
+            }
+            
+
         } else {
             console.log('No highlighting boxes found in data. Available keys:', Object.keys(data));
             // Border is always visible now, no need to hide it
-            this.showStatusMessage('No elements detected', 'info');
+
         }
     }
     
@@ -475,20 +545,39 @@ class BubbleApp {
         const screenWidth = this.screenWidth || window.screen.width;
         const screenHeight = this.screenHeight || window.screen.height;
         
-        // Calculate scaling factors between screen and viewport
-        const scaleX = viewportWidth / screenWidth;
-        const scaleY = viewportHeight / screenHeight;
+        // Use actual window bounds if available, otherwise fall back to full screen
+        const windowBounds = this.windowBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
+        const windowContentBounds = this.windowContentBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
+        
+        // Calculate the actual area the window covers on screen
+        const actualWindowWidth = windowBounds.width;
+        const actualWindowHeight = windowBounds.height;
+        const actualWindowX = windowBounds.x;
+        const actualWindowY = windowBounds.y;
+        
+        // Calculate scaling factors between actual window area and viewport
+        const scaleX = viewportWidth / actualWindowWidth;
+        const scaleY = viewportHeight / actualWindowHeight;
         
         // Scale coordinates from screen percentages to viewport pixels
-        const scaledX = Math.round(x * screenWidth * scaleX);
-        const scaledY = Math.round(y * screenHeight * scaleY);
-        const scaledWidth = Math.round(width * screenWidth * scaleX);
-        const scaledHeight = Math.round(height * screenHeight * scaleY);
+        // First convert from screen percentages to actual window coordinates
+        const windowX = Math.round(x * screenWidth - actualWindowX);
+        const windowY = Math.round(y * screenHeight - actualWindowY);
+        const windowWidth = Math.round(width * screenWidth);
+        const windowHeight = Math.round(height * screenHeight);
+        
+        // Then scale to viewport pixels
+        const scaledX = Math.round(windowX * scaleX);
+        const scaledY = Math.round(windowY * scaleY);
+        const scaledWidth = Math.round(windowWidth * scaleX);
+        const scaledHeight = Math.round(windowHeight * scaleY);
         
         console.log(`Drawing box ${index + 1}:`, {
             original: { x, y, width, height },
+            windowCoords: { x: windowX, y: windowY, width: windowWidth, height: windowHeight },
             scaled: { x: scaledX, y: scaledY, width: scaledWidth, height: scaledHeight },
             screen: { width: screenWidth, height: screenHeight },
+            windowBounds: windowBounds,
             viewport: { width: viewportWidth, height: viewportHeight },
             scale: { x: scaleX, y: scaleY },
             devicePixelRatio: window.devicePixelRatio,
@@ -572,46 +661,74 @@ class BubbleApp {
     
     drawStepDescription(x, y, width, height, stepInfo) {
         const description = stepInfo.action;
-        const maxWidth = Math.max(200, width + 50); // Minimum width for readability
-        
-        // Calculate text position (above the bounding box)
+        const viewportWidth = this.viewportWidth || window.innerWidth;
+        const maxBoxWidth = Math.floor(viewportWidth * 0.8); // 80% of viewport
+        const minBoxWidth = Math.max(200, width + 50);
+        const font = '14px Lato';
+        this.ctx.font = font;
+
+        // Word wrap the description
+        const words = description.split(' ');
+        let lines = [];
+        let currentLine = '';
+        for (let i = 0; i < words.length; i++) {
+            const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+            const testWidth = this.ctx.measureText(testLine).width;
+            if (testWidth > maxBoxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = words[i];
+            } else {
+                currentLine = testLine;
+            }
+        }
+        if (currentLine) lines.push(currentLine);
+
+        // Calculate box size
+        const textHeight = 20;
+        const lineHeight = 22;
+        const bgPadding = 10;
+        const boxWidth = Math.max(
+            minBoxWidth,
+            Math.min(
+                maxBoxWidth,
+                Math.max(...lines.map(line => this.ctx.measureText(line).width)) + bgPadding * 2
+            )
+        );
+        const boxHeight = lines.length * lineHeight + bgPadding * 2;
+
+        // Position box above the bounding box
         const textX = x + width / 2;
         const textY = y - 30;
-        
-        // Measure text to determine background size
-        this.ctx.font = '14px Lato';
-        const textMetrics = this.ctx.measureText(description);
-        const textWidth = textMetrics.width;
-        const textHeight = 20;
-        
+        const bgX = textX - boxWidth / 2;
+        const bgY = textY - boxHeight / 2;
+
         // Draw background rectangle
-        const bgPadding = 10;
-        const bgWidth = Math.min(maxWidth, textWidth + bgPadding * 2);
-        const bgHeight = textHeight + bgPadding * 2;
-        const bgX = textX - bgWidth / 2;
-        const bgY = textY - bgHeight / 2;
-        
-        // Background with semi-transparent purple
         this.ctx.fillStyle = 'rgba(128, 0, 255, 0.9)';
-        this.ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
-        
+        this.ctx.fillRect(bgX, bgY, boxWidth, boxHeight);
+
         // Border
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
         this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
-        
-        // Text
+        this.ctx.strokeRect(bgX, bgY, boxWidth, boxHeight);
+
+        // Draw each line of text
         this.ctx.fillStyle = 'rgba(255, 255, 255, 1)';
-        this.ctx.font = '14px Lato';
+        this.ctx.font = font;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(description, textX, textY);
-        
+        for (let i = 0; i < lines.length; i++) {
+            this.ctx.fillText(
+                lines[i],
+                textX,
+                bgY + bgPadding + lineHeight / 2 + i * lineHeight
+            );
+        }
+
         // Draw connecting line from description to bounding box
         this.ctx.strokeStyle = 'rgba(128, 0, 255, 0.8)';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
-        this.ctx.moveTo(textX, bgY + bgHeight);
+        this.ctx.moveTo(textX, bgY + boxHeight);
         this.ctx.lineTo(x + width / 2, y);
         this.ctx.stroke();
     }
@@ -677,14 +794,18 @@ class BubbleApp {
             return;
         }
         
-        console.log('Starting new screenshot workflow...');
+        // Start timing for global shortcut workflow
+        this.workflowStartTime = Date.now();
+        console.log(`[TIMING] Global shortcut workflow started at: ${new Date(this.workflowStartTime).toISOString()}`);
+        
+        console.log('Starting new workflow...');
         this.clearHighlightingBoxes();
-        this.showStatusMessage('Taking new screenshot...', 'info');
+
         
         // For global shortcut, we need to handle the case where there's no current prompt
         if (!this.currentPrompt || this.currentPrompt.trim() === '') {
             // Use a default prompt for global shortcut
-            this.currentPrompt = 'Analyze this screenshot and identify all interactive elements';
+            this.currentPrompt = 'Analyze this screen and identify all interactive elements';
         }
         
         // Start new workflow - prompt box should remain hidden
@@ -694,8 +815,8 @@ class BubbleApp {
         try {
             await this.startScreenshotWorkflow();
         } catch (error) {
-            console.error('Screenshot workflow failed:', error);
-            this.showStatusMessage('Screenshot failed: ' + error.message, 'error');
+            console.error('Workflow failed:', error);
+            this.showStatusMessage('Request failed: ' + error.message, 'error');
             this.isProcessing = false;
             this.showLoading(false);
         }

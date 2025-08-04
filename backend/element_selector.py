@@ -9,6 +9,7 @@ from omni_api_hf_spaces import omni_api
 from PIL import Image
 import io
 import base64
+import time
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -117,11 +118,19 @@ def select_element_with_llm(task: str, screenshot_base64: str, elements: List[Di
     )
 
     for attempt in range(max_retries):
+        element_select_start = time.time()
+        print(f"[ELEMENT SELECT TIMING] Starting element selection attempt {attempt + 1} at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
         response = client.models.generate_content(
             model=model,
             contents=create_input(user_prompt, screenshot_base64),
             config=generate_content_config,
         )
+        
+        element_select_end = time.time()
+        element_select_time = (element_select_end - element_select_start) * 1000
+        print(f"[ELEMENT SELECT TIMING] Element selection attempt {attempt + 1} completed in: {element_select_time:.2f}ms")
+        
         content = response.text.strip()
         # Try to extract the JSON object
         match = re.search(r'\{.*\}', content, re.DOTALL)

@@ -173,9 +173,7 @@ body {
     right: -15px;
     bottom: -15px;
     border-radius: 15px;
-    background: radial-gradient(ellipse at 50% 50%, 
-        rgba(255, 255, 255, 0.05) 0%, 
-        transparent 50%);
+    background: transparent;
     animation: borderGlow 2s ease-in-out infinite alternate;
     pointer-events: none;
     z-index: -1;
@@ -330,13 +328,13 @@ body {
 /* Loading indicator */
 .loading-indicator {
     position: fixed;
-    top: 50%;
+    bottom: 20px;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
     border-radius: 12px;
-    padding: 20px;
+    padding: 12px 20px;
     display: none;
     align-items: center;
     gap: 12px;
@@ -366,7 +364,7 @@ body {
 /* Status messages */
 .status-message {
     position: fixed;
-    bottom: 20px;
+    bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.8);
@@ -467,8 +465,16 @@ body {
 }
 
 /* Clickthrough mode styles */
+.clickthrough-mode .overlay-container {
+    pointer-events: none !important;
+}
+
+.clickthrough-mode .fullscreen-border {
+    pointer-events: none !important;
+}
+
 .clickthrough-mode .prompt-container {
-    pointer-events: none;
+    pointer-events: auto;
 }
 
 .clickthrough-mode .prompt-container input:focus {

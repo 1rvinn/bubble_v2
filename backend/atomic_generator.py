@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 import io
+import time
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -77,11 +78,19 @@ def generate_next_atomic_task(user_prompt: str, screenshot_path: str, history: L
     model = "gemini-2.5-flash"
 
     try:
+        gemini_start = time.time()
+        print(f"[GEMINI TIMING] Starting Gemini API call at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
         response = client.models.generate_content(
             model=model,
             contents=create_input(user_prompt, screenshot_path, history),
             config=generate_content_config,
         )
+        
+        gemini_end = time.time()
+        gemini_time = (gemini_end - gemini_start) * 1000
+        print(f"[GEMINI TIMING] Gemini API call completed in: {gemini_time:.2f}ms")
+        
         content = response.text.strip()
         try:
             task = json.loads(content)
