@@ -43,6 +43,22 @@ function createWindow() {
   // Makes window click-through - user can interact with content behind it
   win.setIgnoreMouseEvents(true, { forward: true });
   clickthroughEnabled = true;
+  
+  // Monitor mouse events to detect clicks on underlying application
+  let mouseClickDetected = false;
+  
+  // Listen for mouse events that pass through
+  win.webContents.on('did-start-loading', () => {
+    win.webContents.executeJavaScript(`
+      document.addEventListener('mouseup', (e) => {
+        // Only detect clicks that are not on our overlay elements
+        if (!e.target.closest('.prompt-container') && !e.target.closest('.overlay-container')) {
+          // Send IPC message directly since nodeIntegration is enabled
+          require('electron').ipcRenderer.send('underlying-app-click');
+        }
+      }, true);
+    `);
+  });
 
   // Suppress DevTools warnings
   win.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -67,6 +83,38 @@ function createWindow() {
       // Don't hide the window - this ensures the overlay stays visible
       // Clear bounding boxes when user clicks through
       win.webContents.send('clear-highlighting');
+    }
+  });
+  
+  // Detect clicks on underlying application when in clickthrough mode
+  let lastBlurTime = 0;
+  let clickDetectionTimeout = null;
+  
+  win.on('blur', () => {
+    if (clickthroughEnabled) {
+      lastBlurTime = Date.now();
+      
+      // Clear any existing timeout
+      if (clickDetectionTimeout) {
+        clearTimeout(clickDetectionTimeout);
+      }
+      
+      // Set a timeout to detect if this was a click on underlying app
+      clickDetectionTimeout = setTimeout(() => {
+        // If window is still blurred after a delay, it was likely a click on underlying app
+        if (!win.isFocused() && (Date.now() - lastBlurTime) > 50) {
+          console.log('Click detected on underlying application - clearing highlighting');
+          win.webContents.send('underlying-app-click');
+        }
+      }, 150); // 150ms delay to distinguish between focus changes and actual clicks
+    }
+  });
+  
+  win.on('focus', () => {
+    // Clear timeout if window regains focus
+    if (clickDetectionTimeout) {
+      clearTimeout(clickDetectionTimeout);
+      clickDetectionTimeout = null;
     }
   });
 
@@ -109,7 +157,7 @@ function startPythonBackend() {
   });
 }
 
-async function processScreenshotWithBackend(screenshotPath, prompt) {
+async function processScreenshotWithBackend(screenshotPath, prompt, history) {
   return new Promise((resolve, reject) => {
     if (!pythonProcess) {
       reject(new Error('Python backend not running'));
@@ -126,6 +174,7 @@ async function processScreenshotWithBackend(screenshotPath, prompt) {
     const data = JSON.stringify({
       screenshot_path: screenshotPath,
       prompt: prompt,
+      history: history, // Pass history to the backend
       action: 'process_screenshot'
     });
 
@@ -196,21 +245,7 @@ app.whenReady().then(() => {
       // Send message to renderer to focus input with a small delay
       setTimeout(() => {
         win.webContents.send('focus-input');
-      }, 100);
-    }
-  });
-  
-  // Register global shortcut (Cmd+Shift+F) - Focus input box (when app is visible)
-  globalShortcut.register('CommandOrControl+Shift+F', () => {
-    if (win.isVisible()) {
-      win.webContents.send('focus-input');
-    }
-  });
-  
-  // Register global shortcut (Cmd+/) - Submit prompt
-  globalShortcut.register('CommandOrControl+/', () => {
-    if (win.isVisible()) {
-      win.webContents.send('submit-prompt');
+      }, 200);
     }
   });
   
@@ -242,13 +277,31 @@ app.whenReady().then(() => {
     }
   });
 
-  // Register global shortcut (Ctrl+Shift+0) - Take new screenshot and process
+  // Register global shortcut (Ctrl+Shift+0) - Take new screenshot and process OR mark step as success
   globalShortcut.register('CommandOrControl+Shift+0', async () => {
     console.log('Global shortcut Ctrl+Shift+0 triggered');
     
-    try {
-      // Show the window if it's hidden
-      if (!win.isVisible()) {
+    if (win.isVisible()) {
+      // If window is visible, mark step as success
+      console.log('Window is visible, sending mark-step-success IPC message');
+      console.log('Window webContents ready:', win.webContents.isLoading() ? 'loading' : 'ready');
+      console.log('Window webContents destroyed:', win.webContents.isDestroyed());
+      
+      try {
+        win.webContents.send('mark-step-success');
+        console.log('mark-step-success IPC message sent successfully');
+        
+        // Test IPC communication
+        console.log('Sending test IPC message');
+        win.webContents.send('test-ipc');
+        console.log('test-ipc message sent successfully');
+      } catch (error) {
+        console.error('Error sending IPC message:', error);
+      }
+    } else {
+      // If window is hidden, show it and trigger new screenshot
+      console.log('Window is hidden, showing window and triggering new screenshot');
+      try {
         win.show();
         win.focus();
         
@@ -256,13 +309,44 @@ app.whenReady().then(() => {
         setTimeout(() => {
           win.webContents.send('trigger-new-screenshot');
         }, 200);
-      } else {
-        // Window is already visible, trigger immediately
-        win.webContents.send('trigger-new-screenshot');
+      } catch (error) {
+        console.error('Error handling global screenshot shortcut:', error);
       }
+    }
+  });
+
+  // Register global shortcut (Ctrl+Shift+1) - Mark step as failure
+  globalShortcut.register('CommandOrControl+Shift+1', () => {
+    console.log('Global shortcut Ctrl+Shift+1 (failure) triggered');
+    if (win.isVisible()) {
+      console.log('Window is visible, sending mark-step-failure IPC message');
+      console.log('Window webContents ready:', win.webContents.isLoading() ? 'loading' : 'ready');
+      console.log('Window webContents destroyed:', win.webContents.isDestroyed());
       
-    } catch (error) {
-      console.error('Error handling global screenshot shortcut:', error);
+      try {
+        win.webContents.send('mark-step-failure');
+        console.log('mark-step-failure IPC message sent successfully');
+      } catch (error) {
+        console.error('Error sending IPC message:', error);
+      }
+    } else {
+      console.log('Window is not visible, ignoring mark-step-failure');
+    }
+  });
+
+  // Register global shortcut (Ctrl+Shift+D) - Open Developer Tools for debugging
+  globalShortcut.register('CommandOrControl+Shift+D', () => {
+    console.log('Global shortcut Ctrl+Shift+D (DevTools) triggered');
+    if (win.isVisible()) {
+      if (win.webContents.isDevToolsOpened()) {
+        win.webContents.closeDevTools();
+        console.log('Developer Tools closed');
+      } else {
+        win.webContents.openDevTools();
+        console.log('Developer Tools opened');
+      }
+    } else {
+      console.log('Window not visible, cannot open DevTools');
     }
   });
 
@@ -315,12 +399,14 @@ app.whenReady().then(() => {
   // IPC handler for processing screenshots with backend
   ipcMain.handle('process-screenshot', async (event, data) => {
     try {
-      const { screenshotPath, prompt } = data;
+      const { screenshotPath, prompt, history } = data;
+      
+      console.log('IPC received data:', { screenshotPath, prompt, history });
       
       // Send processing status to frontend
       win.webContents.send('processing-status', 'Thinking...');
       
-      const result = await processScreenshotWithBackend(screenshotPath, prompt);
+      const result = await processScreenshotWithBackend(screenshotPath, prompt, history);
       
       // Send result back to frontend
       win.webContents.send('backend-result', result);
@@ -390,6 +476,18 @@ app.whenReady().then(() => {
       console.log('IPC: Mouse events now captured by this window');
     }
     return clickthroughEnabled;
+  });
+  
+  // IPC handler for underlying app click detection
+  ipcMain.on('underlying-app-click', () => {
+    console.log('Underlying app click detected via IPC');
+    win.webContents.send('underlying-app-click');
+  });
+  
+  // Test IPC communication from renderer
+  ipcMain.on('test-renderer-ready', () => {
+    console.log('Renderer is ready and communicating!');
+    win.webContents.send('test-ipc');
   });
 });
 

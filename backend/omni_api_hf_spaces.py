@@ -19,17 +19,9 @@ except Exception as e:
     print(f'[OMNI INIT] Error initializing client: {e}')
     client = None
 
-def create_fallback_element_string():
-    """
-    Create a basic fallback element string when Omni API is unavailable
-    This provides minimal functionality to keep the app working
-    """
-    return "Basic UI elements detected. Text and interactive elements may be present."
-
 def omni_api(img_base64_str, max_retries=3):
     if client is None:
-        print("[OMNI WARNING] Client not initialized, using fallback mode")
-        return img_base64_str, create_fallback_element_string()
+        raise RuntimeError("Omni API client not initialized")
     
     for attempt in range(max_retries):
         try:
@@ -60,8 +52,8 @@ def omni_api(img_base64_str, max_retries=3):
                 print(f"[OMNI RETRY] Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
-                print("[OMNI ERROR] All retry attempts failed due to timeout, using fallback")
-                return img_base64_str, create_fallback_element_string()
+                print("[OMNI ERROR] All retry attempts failed due to timeout")
+                raise RuntimeError(f"Omni API timeout after {max_retries} attempts: {str(e)}")
                 
         except ConnectError as e:
             print(f"[OMNI ERROR] Connection error on attempt {attempt + 1}: {e}")
@@ -70,8 +62,8 @@ def omni_api(img_base64_str, max_retries=3):
                 print(f"[OMNI RETRY] Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
-                print("[OMNI ERROR] All retry attempts failed due to connection error, using fallback")
-                return img_base64_str, create_fallback_element_string()
+                print("[OMNI ERROR] All retry attempts failed due to connection error")
+                raise RuntimeError(f"Omni API connection error after {max_retries} attempts: {str(e)}")
                 
         except Exception as e:
             print(f"[OMNI ERROR] Unexpected error on attempt {attempt + 1}: {e}")
@@ -80,7 +72,7 @@ def omni_api(img_base64_str, max_retries=3):
                 print(f"[OMNI RETRY] Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
-                print("[OMNI ERROR] All retry attempts failed due to unexpected error, using fallback")
-                return img_base64_str, create_fallback_element_string()
+                print("[OMNI ERROR] All retry attempts failed due to unexpected error")
+                raise RuntimeError(f"Omni API unexpected error after {max_retries} attempts: {str(e)}")
 
 # print(omni_api('image.png'))

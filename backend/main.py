@@ -11,13 +11,17 @@ import time
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-def process_screenshot_request(screenshot_path, prompt):
+def process_screenshot_request(screenshot_path, prompt, history=None):
     """
     Process a screenshot with the given prompt and return results
     """
+    if history is None:
+        history = []
+    
     # Start timing for backend processing
     backend_start_time = time.time()
     print(f"[BACKEND TIMING] Backend processing started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"[BACKEND TIMING] History: {history}")
     
     try:
         # Resize image if needed
@@ -32,7 +36,7 @@ def process_screenshot_request(screenshot_path, prompt):
         # Generate atomic task
         task_gen_start = time.time()
         print(f"[BACKEND TIMING] Starting atomic task generation at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        task = generate_next_atomic_task(prompt, screenshot_path, [])
+        task = generate_next_atomic_task(prompt, screenshot_path, history)
         task_gen_end = time.time()
         print(f"[BACKEND TIMING] Atomic task generation completed in: {(task_gen_end - task_gen_start) * 1000:.2f}ms")
         
@@ -71,7 +75,7 @@ def process_screenshot_request(screenshot_path, prompt):
                 "message": f"Omni API error: {error_msg}",
                 "highlighting_boxes": []
             }
-        
+        # print('omni_result------\n',omni_result)
         # Extract screenshot_b64 and element_string from result
         if isinstance(omni_result, tuple) and len(omni_result) == 2:
             screenshot_b64, element_string = omni_result
@@ -137,6 +141,7 @@ def main():
                 if data.get('action') == 'process_screenshot':
                     screenshot_path = data.get('screenshot_path')
                     prompt = data.get('prompt', '')
+                    history = data.get('history', [])  # Get history with status
                     
                     if not screenshot_path or not os.path.exists(screenshot_path):
                         result = {
@@ -145,7 +150,7 @@ def main():
                             "highlighting_boxes": []
                         }
                     else:
-                        result = process_screenshot_request(screenshot_path, prompt)
+                        result = process_screenshot_request(screenshot_path, prompt, history)
                     
                     # Send result back to Electron
                     print(json.dumps(result))

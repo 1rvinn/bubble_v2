@@ -12,19 +12,32 @@ class BubbleApp {
         this.initialPromptEntered = false;
         this.promptBoxShown = false;
         this.workflowStartTime = null; // Add timing variable
+        this.taskHistory = []; // Track task history with status
+        this.currentTask = null; // Track current task being displayed
+        
+        // Debug initial state
+        console.log('BubbleApp initialized with:', {
+            initialPromptEntered: this.initialPromptEntered,
+            promptBoxShown: this.promptBoxShown,
+            promptContainerClasses: this.promptContainer ? this.promptContainer.className : 'not found'
+        });
     }
 
     initializeElements() {
         this.promptInput = document.getElementById('promptInput');
         this.submitBtn = document.getElementById('submitBtn');
-        this.settingsBtn = document.getElementById('settingsBtn');
         this.promptBar = document.getElementById('promptBar');
         this.promptContainer = document.getElementById('promptContainer');
-        this.loadingIndicator = document.getElementById('loadingIndicator');
-        this.statusMessage = document.getElementById('statusMessage');
         this.overlayCanvas = document.getElementById('overlayCanvas');
         this.overlayContainer = document.getElementById('overlayContainer');
         this.fullscreenBorder = document.getElementById('fullscreenBorder');
+        this.loadingIndicator = document.getElementById('loadingIndicator');
+        this.statusMessage = document.getElementById('statusMessage');
+        
+        // Ensure prompt container is visible by default for first use
+        if (this.promptContainer) {
+            this.promptContainer.classList.remove('hidden');
+        }
     }
 
     bindEvents() {
@@ -39,7 +52,7 @@ class BubbleApp {
         });
 
         // Settings button
-        this.settingsBtn.addEventListener('click', () => this.handleSettings());
+        // this.settingsBtn.addEventListener('click', () => this.handleSettings()); // Removed
 
         // Input focus
         this.promptInput.addEventListener('focus', () => this.handleInputFocus());
@@ -81,7 +94,7 @@ class BubbleApp {
         this.clickthroughEnabled = true;
         document.body.classList.add('clickthrough-mode');
         
-        // Ensure overlay elements are clickthrough
+        // Disable interaction with overlay elements when clickthrough is enabled
         this.overlayContainer.style.pointerEvents = 'none';
         this.fullscreenBorder.style.pointerEvents = 'none';
         
@@ -89,7 +102,6 @@ class BubbleApp {
         this.promptContainer.style.pointerEvents = 'auto';
         
         console.log('Renderer: Clickthrough enabled');
-        this.showStatusMessage('Clickthrough enabled - Use Cmd+Shift+F to focus input, Cmd+/ to submit', 'info');
     }
     
     disableClickthrough() {
@@ -107,15 +119,18 @@ class BubbleApp {
     
     focusInput() {
         if (this.promptInput) {
-            // Show prompt box if this is the first time and it hasn't been shown yet
-            if (!this.initialPromptEntered && !this.promptBoxShown) {
+            // Always show prompt box on first focus, regardless of state
+            if (!this.initialPromptEntered) {
                 this.showPromptBox();
                 this.promptBoxShown = true;
-                this.showStatusMessage('Input focused - Type your prompt', 'info');
-            } else {
                 this.promptInput.focus();
                 this.promptInput.select();
-                console.log('Input focused and text selected');
+                console.log('First time focus - showing prompt box and focusing input');
+            } else {
+                // For subsequent focuses, just focus the input
+                this.promptInput.focus();
+                this.promptInput.select();
+                console.log('Subsequent focus - input focused and text selected');
             }
         } else {
             console.warn('Prompt input element not found');
@@ -137,14 +152,21 @@ class BubbleApp {
     }
     
     hidePromptForScreenshot() {
-        console.log('Hiding prompt for screenshot');
-        this.promptContainer.classList.add('hidden');
-        // Hide loading indicator during screenshot
-        this.loadingIndicator.classList.remove('show');
-        // Mark that prompt was shown during screenshot process
-        if (!this.initialPromptEntered) {
-            this.promptBoxShown = true;
+        console.log('Hiding prompt for screenshot (force style)');
+        // Hide loading indicator
+        const loader = document.getElementById('loadingIndicator');
+        if (loader) {
+            loader.style.display = 'none';
+            loader.style.opacity = '0';
         }
+        // Hide next step cue
+        const cue = document.getElementById('nextStepCue');
+        if (cue) {
+            cue.style.display = 'none';
+            cue.style.opacity = '0';
+        }
+        // Hide prompt container as before
+        this.promptContainer.classList.add('hidden');
     }
     
     showPromptAfterScreenshot() {
@@ -153,9 +175,16 @@ class BubbleApp {
         if (!this.initialPromptEntered) {
             this.promptContainer.classList.remove('hidden');
         }
-        // Show loading indicator again after screenshot
+        // Show loading indicator again after screenshot if processing
         if (this.isProcessing) {
-            this.loadingIndicator.classList.add('show');
+            this.loadingIndicator.style.display = 'flex';
+            this.loadingIndicator.style.opacity = '1';
+        }
+        // Show next step cue if it should be visible (e.g., after step is drawn)
+        const nextStepCue = document.getElementById('nextStepCue');
+        if (nextStepCue && !this.isProcessing && this.highlightingBoxes.length > 0) {
+            nextStepCue.style.display = 'flex';
+            nextStepCue.style.opacity = '1';
         }
     }
     
@@ -180,6 +209,12 @@ class BubbleApp {
         this.clearHighlightingBoxes();
     }
     
+    // Add method to handle clicks on underlying application
+    handleUnderlyingAppClick() {
+        console.log('Click detected on underlying application - clearing bounding boxes');
+        this.clearHighlightingBoxes();
+    }
+    
     cleanup() {
         console.log('Cleaning up resources...');
         this.clearCanvas();
@@ -194,6 +229,11 @@ class BubbleApp {
     }
 
     setupIPCListeners() {
+        // Test IPC listener to verify communication
+        ipcRenderer.on('test-ipc', () => {
+            console.log('TEST: IPC communication is working!');
+        });
+        
         // Listen for backend results
         ipcRenderer.on('backend-result', (event, data) => {
             this.handleBackendResult(data);
@@ -224,11 +264,6 @@ class BubbleApp {
             this.enableClickthrough();
         });
         
-        // Listen for submit prompt command
-        ipcRenderer.on('submit-prompt', () => {
-            this.handleSubmit();
-        });
-        
         // Listen for clickthrough mode changes
         ipcRenderer.on('clickthrough-enabled', () => {
             this.enableClickthrough();
@@ -257,6 +292,35 @@ class BubbleApp {
         ipcRenderer.on('clear-highlighting', () => {
             console.log('Received clear-highlighting command from main process');
             this.clearHighlightingBoxes();
+        });
+        
+        // Listen for underlying app click detection
+        ipcRenderer.on('underlying-app-click', () => {
+            console.log('Received underlying-app-click from main process');
+            this.handleUnderlyingAppClick();
+        });
+        
+        // Listen for step control commands
+        ipcRenderer.on('mark-step-success', () => {
+            console.log('=== MARK STEP SUCCESS IPC RECEIVED ===');
+            console.log('Received mark-step-success from main process');
+            console.log('Current task:', this.currentTask);
+            console.log('Is processing:', this.isProcessing);
+            console.log('Task history:', this.taskHistory);
+            console.log('About to call markStepSuccess()');
+            this.markStepSuccess();
+            console.log('=== MARK STEP SUCCESS IPC HANDLED ===');
+        });
+        
+        ipcRenderer.on('mark-step-failure', () => {
+            console.log('=== MARK STEP FAILURE IPC RECEIVED ===');
+            console.log('Received mark-step-failure from main process');
+            console.log('Current task:', this.currentTask);
+            console.log('Is processing:', this.isProcessing);
+            console.log('Task history:', this.taskHistory);
+            console.log('About to call markStepFailure()');
+            this.markStepFailure();
+            console.log('=== MARK STEP FAILURE IPC HANDLED ===');
         });
     }
 
@@ -302,6 +366,14 @@ class BubbleApp {
 
 
     resizeCanvas() {
+        if (!this.overlayCanvas) {
+            console.warn('Canvas not available for resizing');
+            return;
+        }
+
+        // Get the device pixel ratio for high-DPI displays
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        
         // Get the viewport dimensions (what the canvas should actually display)
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
@@ -310,9 +382,17 @@ class BubbleApp {
         const screenWidth = window.screen.width;
         const screenHeight = window.screen.height;
         
-        // Set canvas to viewport dimensions (matches the CSS 100vw/100vh)
-        this.overlayCanvas.width = viewportWidth;
-        this.overlayCanvas.height = viewportHeight;
+        // Set canvas size accounting for device pixel ratio
+        this.overlayCanvas.width = viewportWidth * devicePixelRatio;
+        this.overlayCanvas.height = viewportHeight * devicePixelRatio;
+        
+        // Set the CSS size to match the viewport
+        this.overlayCanvas.style.width = `${viewportWidth}px`;
+        this.overlayCanvas.style.height = `${viewportHeight}px`;
+        
+        // Scale the context to account for the device pixel ratio
+        const ctx = this.overlayCanvas.getContext('2d');
+        ctx.scale(devicePixelRatio, devicePixelRatio);
         
         // Also update the overlay container size (should already be 100vw/100vh in CSS)
         this.overlayContainer.style.width = `${viewportWidth}px`;
@@ -323,6 +403,7 @@ class BubbleApp {
         this.screenHeight = screenHeight;
         this.viewportWidth = viewportWidth;
         this.viewportHeight = viewportHeight;
+        this.devicePixelRatio = devicePixelRatio;
         
         // Update window bounds if not already set
         if (!this.windowBounds) {
@@ -332,11 +413,13 @@ class BubbleApp {
         console.log('Canvas resized to:', {
             width: this.overlayCanvas.width,
             height: this.overlayCanvas.height,
+            cssWidth: this.overlayCanvas.style.width,
+            cssHeight: this.overlayCanvas.style.height,
             viewport: { width: viewportWidth, height: viewportHeight },
             screen: { width: screenWidth, height: screenHeight },
             window: { width: window.innerWidth, height: window.innerHeight },
             availScreen: { width: window.screen.availWidth, height: window.screen.availHeight },
-            devicePixelRatio: window.devicePixelRatio
+            devicePixelRatio: devicePixelRatio
         });
     }
 
@@ -353,6 +436,7 @@ class BubbleApp {
         this.isProcessing = true;
         this.showLoading(true);
         this.clearHighlightingBoxes();
+        this.taskHistory = []; // Reset history for new workflow
 
         // Hide prompt box after first use and keep it hidden
         this.hidePromptBox();
@@ -364,6 +448,13 @@ class BubbleApp {
 
     async startScreenshotWorkflow() {
         try {
+            // Always hide overlays before every screenshot
+            this.hidePromptForScreenshot();
+
+            // Force a reflow and wait a bit longer to ensure DOM updates
+            document.body.offsetHeight;
+            await new Promise(resolve => setTimeout(resolve, 250));
+
             const workflowStepTime = Date.now();
             console.log(`[TIMING] Screenshot workflow started at: ${new Date(workflowStepTime).toISOString()}`);
             if (this.workflowStartTime) {
@@ -439,6 +530,9 @@ class BubbleApp {
     showPromptBox() {
         console.log('Showing prompt box');
         this.promptContainer.classList.remove('hidden');
+        // Force a reflow to ensure the change takes effect
+        this.promptContainer.offsetHeight;
+        console.log('Prompt container classes after show:', this.promptContainer.className);
     }
 
     async takeScreenshot() {
@@ -453,9 +547,11 @@ class BubbleApp {
 
     async sendToBackend(screenshotPath) {
         try {
+            console.log('Sending to backend with history:', this.taskHistory);
             const result = await ipcRenderer.invoke('process-screenshot', {
                 screenshotPath,
-                prompt: this.currentPrompt
+                prompt: this.currentPrompt,
+                history: this.taskHistory  // Include history with status
             });
             return result;
         } catch (error) {
@@ -479,8 +575,25 @@ class BubbleApp {
         console.log('highlighting_boxes:', data.highlighting_boxes);
         console.log('highlightingBoxes:', data.highlightingBoxes);
 
+        // Check if the task is completed
+        if (data.status === 'completed') {
+            console.log('Task completed - showing completion notification');
+            this.showCompletionNotification(data.message || 'Task completed successfully!');
+            // Clear history when task is completed
+            this.taskHistory = [];
+            this.currentTask = null;
+            return;
+        }
+
         // Check for both possible property names
         const boxes = data.highlighting_boxes || data.highlightingBoxes;
+        
+        // Check if this is a scroll action
+        if (data.task && data.task.action && (data.task.action.toLowerCase().includes('scroll'))) {
+            console.log('Scroll action detected:', data.task.action);
+            this.drawScrollCommentBox(data.task.action);
+            return;
+        }
         
         if (boxes && Array.isArray(boxes) && boxes.length > 0) {
             console.log('Drawing highlighting boxes:', boxes);
@@ -491,13 +604,20 @@ class BubbleApp {
                 screenHeight: this.screenHeight || window.screen.height
             });
             
+            // Store current task for step control
+            if (data.task) {
+                this.currentTask = data.task;
+                console.log('Current task set for step control:', this.currentTask);
+            } else {
+                console.log('No task data in backend result');
+            }
+            
             // Display step description if available
             let stepInfo = null;
             if (data.task && data.task.step && data.task.action) {
-                this.showStepDescription(data.task.step, data.task.action);
                 stepInfo = { step: data.task.step, action: data.task.action };
             } else if (data.task && data.task.action) {
-                this.showTaskDescription(data.task.action);
+                stepInfo = { action: data.task.action };
             }
             
             // Animate border shrinking to bounding boxes
@@ -520,18 +640,6 @@ class BubbleApp {
             // Border is always visible now, no need to hide it
 
         }
-    }
-    
-    showTaskDescription(action) {
-        const taskMessage = `Task: ${action}`;
-        console.log('Task description:', taskMessage);
-        this.showStatusMessage(taskMessage, 'task');
-    }
-    
-    showStepDescription(step, action) {
-        const stepMessage = `Step ${step}: ${action}`;
-        console.log('Step description:', stepMessage);
-        this.showStatusMessage(stepMessage, 'step');
     }
     
     async animateBorderToBoxes(boxes, stepInfo = null) {
@@ -558,143 +666,54 @@ class BubbleApp {
 
     async drawBox(box, index, stepInfo = null) {
         const { x, y, width, height } = box;
-        
         // Use stored dimensions or fall back to current values
         const viewportWidth = this.viewportWidth || window.innerWidth;
         const viewportHeight = this.viewportHeight || window.innerHeight;
         const screenWidth = this.screenWidth || window.screen.width;
         const screenHeight = this.screenHeight || window.screen.height;
-        
-        // Use actual window bounds if available, otherwise fall back to full screen
         const windowBounds = this.windowBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
-        const windowContentBounds = this.windowContentBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
-        
-        // Calculate the actual area the window covers on screen
         const actualWindowWidth = windowBounds.width;
         const actualWindowHeight = windowBounds.height;
         const actualWindowX = windowBounds.x;
         const actualWindowY = windowBounds.y;
-        
-        // Calculate scaling factors between actual window area and viewport
         const scaleX = viewportWidth / actualWindowWidth;
         const scaleY = viewportHeight / actualWindowHeight;
-        
-        // Scale coordinates from screen percentages to viewport pixels
-        // First convert from screen percentages to actual window coordinates
+        // Convert from screen percentages to window coordinates
         const windowX = Math.round(x * screenWidth - actualWindowX);
         const windowY = Math.round(y * screenHeight - actualWindowY);
         const windowWidth = Math.round(width * screenWidth);
         const windowHeight = Math.round(height * screenHeight);
-        
-        // Then scale to viewport pixels
+        // Scale to viewport
         const scaledX = Math.round(windowX * scaleX);
         const scaledY = Math.round(windowY * scaleY);
         const scaledWidth = Math.round(windowWidth * scaleX);
         const scaledHeight = Math.round(windowHeight * scaleY);
-        
-        console.log(`Drawing box ${index + 1}:`, {
-            original: { x, y, width, height },
-            windowCoords: { x: windowX, y: windowY, width: windowWidth, height: windowHeight },
-            scaled: { x: scaledX, y: scaledY, width: scaledWidth, height: scaledHeight },
-            screen: { width: screenWidth, height: screenHeight },
-            windowBounds: windowBounds,
-            viewport: { width: viewportWidth, height: viewportHeight },
-            scale: { x: scaleX, y: scaleY },
-            devicePixelRatio: window.devicePixelRatio,
-            canvasSize: { width: this.overlayCanvas.width, height: this.overlayCanvas.height }
-        });
-        
-        // Ensure coordinates are within canvas bounds
-        const clampedX = Math.max(0, Math.min(scaledX, this.overlayCanvas.width));
-        const clampedY = Math.max(0, Math.min(scaledY, this.overlayCanvas.height));
-        const clampedWidth = Math.min(scaledWidth, this.overlayCanvas.width - clampedX);
-        const clampedHeight = Math.min(scaledHeight, this.overlayCanvas.height - clampedY);
-        
-        // Draw semi-transparent background
-        this.ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
-        this.ctx.fillRect(clampedX, clampedY, clampedWidth, clampedHeight);
-        
-        // Draw border
-        this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(clampedX, clampedY, clampedWidth, clampedHeight);
-        
-        // Draw corner indicators
-        this.drawCornerIndicators(clampedX, clampedY, clampedWidth, clampedHeight);
-        
-        // Draw label with step info if available
-        const labelText = stepInfo ? '' : (index + 1).toString();
-        this.drawLabel(clampedX, clampedY, labelText);
-        
-        // Draw step description alongside the bounding box
+        // Center-top of the element
+        const anchorX = scaledX + scaledWidth / 2;
+        const anchorY = scaledY;
+        // Draw only the comment/task box with a connecting line
         if (stepInfo) {
-            this.drawStepDescription(clampedX, clampedY, clampedWidth, clampedHeight, stepInfo);
+            this.drawCommentBox(anchorX, anchorY, stepInfo.action);
+            this.showNextStepCue();
         }
     }
 
-    drawCornerIndicators(x, y, width, height) {
-        const cornerSize = 8;
-        const cornerColor = 'rgba(0, 255, 255, 1)';
-        
-        this.ctx.fillStyle = cornerColor;
-        
-        // Top-left corner
-        this.ctx.fillRect(x - 1, y - 1, cornerSize, 2);
-        this.ctx.fillRect(x - 1, y - 1, 2, cornerSize);
-        
-        // Top-right corner
-        this.ctx.fillRect(x + width - cornerSize + 1, y - 1, cornerSize, 2);
-        this.ctx.fillRect(x + width - 1, y - 1, 2, cornerSize);
-        
-        // Bottom-left corner
-        this.ctx.fillRect(x - 1, y + height - 1, cornerSize, 2);
-        this.ctx.fillRect(x - 1, y + height - cornerSize + 1, 2, cornerSize);
-        
-        // Bottom-right corner
-        this.ctx.fillRect(x + width - cornerSize + 1, y + height - 1, cornerSize, 2);
-        this.ctx.fillRect(x + width - 1, y + height - cornerSize + 1, 2, cornerSize);
-    }
-
-    drawLabel(x, y, text) {
-        // Don't draw label if text is empty
-        if (!text || text.trim() === '') {
-            return;
-        }
-        
-        const labelSize = 20;
-        const labelX = x - labelSize / 2;
-        const labelY = y - labelSize - 5;
-        
-        // Background circle
-        this.ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
-        this.ctx.beginPath();
-        this.ctx.arc(x, labelY + labelSize / 2, labelSize / 2, 0, 2 * Math.PI);
-        this.ctx.fill();
-        
-        // Text
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        this.ctx.font = '12px Lato';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(text.toString(), x, labelY + labelSize / 2);
-    }
-    
-    drawStepDescription(x, y, width, height, stepInfo) {
-        const description = stepInfo.action;
+    drawCommentBox(anchorX, anchorY, text) {
+        // Settings for the comment box
+        const ctx = this.ctx;
+        const font = '16px Lato';
+        ctx.font = font;
         const viewportWidth = this.viewportWidth || window.innerWidth;
-        const maxBoxWidth = Math.floor(viewportWidth * 0.8); // 80% of viewport
-        const minBoxWidth = Math.max(200, width + 50);
-        const font = '14px Lato';
-        this.ctx.font = font;
-
-        // Word wrap the description
-        const words = description.split(' ');
+        const maxWidth = Math.floor(viewportWidth * 0.7);
+        const padding = 16;
+        // Word wrap
+        const words = text.split(' ');
         let lines = [];
         let currentLine = '';
         for (let i = 0; i < words.length; i++) {
             const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
-            const testWidth = this.ctx.measureText(testLine).width;
-            if (testWidth > maxBoxWidth && currentLine) {
+            const testWidth = ctx.measureText(testLine).width;
+            if (testWidth > maxWidth && currentLine) {
                 lines.push(currentLine);
                 currentLine = words[i];
             } else {
@@ -702,55 +721,106 @@ class BubbleApp {
             }
         }
         if (currentLine) lines.push(currentLine);
-
         // Calculate box size
-        const textHeight = 20;
-        const lineHeight = 22;
-        const bgPadding = 10;
-        const boxWidth = Math.max(
-            minBoxWidth,
-            Math.min(
-                maxBoxWidth,
-                Math.max(...lines.map(line => this.ctx.measureText(line).width)) + bgPadding * 2
-            )
+        const lineHeight = 24;
+        const boxWidth = Math.min(
+            maxWidth,
+            Math.max(...lines.map(line => ctx.measureText(line).width)) + padding * 2
         );
-        const boxHeight = lines.length * lineHeight + bgPadding * 2;
-
-        // Position box above the bounding box
-        const textX = x + width / 2;
-        const textY = y - 30;
-        const bgX = textX - boxWidth / 2;
-        const bgY = textY - boxHeight / 2;
-
-        // Draw background rectangle
-        this.ctx.fillStyle = 'rgba(128, 0, 255, 0.9)';
-        this.ctx.fillRect(bgX, bgY, boxWidth, boxHeight);
-
-        // Border
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(bgX, bgY, boxWidth, boxHeight);
-
-        // Draw each line of text
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 1)';
-        this.ctx.font = font;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
+        const boxHeight = lines.length * lineHeight + padding * 2;
+        // Position the box above the anchor point
+        let boxX = anchorX - boxWidth / 2;
+        const boxY = anchorY - boxHeight - 24; // 24px gap above the element
+        // Clamp boxX so the box stays within the viewport
+        const minX = 8; // 8px margin from left
+        const maxX = viewportWidth - boxWidth - 8; // 8px margin from right
+        if (boxX < minX) boxX = minX;
+        if (boxX > maxX) boxX = maxX;
+        // Adjust tailX so it still points to anchorX, but doesn't go outside the box
+        const tailWidth = 22;
+        let tailX = anchorX;
+        if (tailX < boxX + tailWidth / 2) tailX = boxX + tailWidth / 2;
+        if (tailX > boxX + boxWidth - tailWidth / 2) tailX = boxX + boxWidth - tailWidth / 2;
+        // Draw seamless speech bubble (rounded rect + tail as one path)
+        ctx.save();
+        ctx.beginPath();
+        const radius = 16;
+        const tailHeight = 14;
+        // Top left corner
+        ctx.moveTo(boxX + radius, boxY);
+        // Top edge
+        ctx.lineTo(boxX + boxWidth - radius, boxY);
+        // Top right corner
+        ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+        // Right edge
+        ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+        // Bottom right corner
+        ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+        // Bottom edge to right of tail
+        ctx.lineTo(tailX + tailWidth / 2, boxY + boxHeight);
+        // Tail (downward triangle, seamlessly connected)
+        ctx.lineTo(tailX, boxY + boxHeight + tailHeight);
+        ctx.lineTo(tailX - tailWidth / 2, boxY + boxHeight);
+        // Bottom edge to left
+        ctx.lineTo(boxX + radius, boxY + boxHeight);
+        // Bottom left corner
+        ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+        // Left edge
+        ctx.lineTo(boxX, boxY + radius);
+        // Top left corner
+        ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+        ctx.closePath();
+        // Fill with dark grey background (matching "Thinking..." box)
+        ctx.fillStyle = 'rgba(45, 48, 53, 0.95)';
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 2;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        // Draw text
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         for (let i = 0; i < lines.length; i++) {
-            this.ctx.fillText(
-                lines[i],
-                textX,
-                bgY + bgPadding + lineHeight / 2 + i * lineHeight
-            );
+            ctx.fillText(lines[i], boxX + boxWidth / 2, boxY + padding + lineHeight / 2 + i * lineHeight);
         }
+        ctx.restore();
+    }
 
-        // Draw connecting line from description to bounding box
-        this.ctx.strokeStyle = 'rgba(128, 0, 255, 0.8)';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(textX, bgY + boxHeight);
-        this.ctx.lineTo(x + width / 2, y);
-        this.ctx.stroke();
+    drawScrollCommentBox(action) {
+        console.log('Drawing scroll comment box for action:', action);
+        
+        // Clear any existing highlighting
+        this.clearCanvas();
+        
+        const viewportWidth = this.viewportWidth || window.innerWidth;
+        const viewportHeight = this.viewportHeight || window.innerHeight;
+        
+        // Determine scroll direction
+        const isScrollUp = action.toLowerCase().includes('up');
+        const isScrollDown = action.toLowerCase().includes('down');
+        
+        if (!isScrollUp && !isScrollDown) {
+            console.log('Unknown scroll direction:', action);
+            return;
+        }
+        
+        // Position the comment box at the top or bottom of the screen
+        const anchorX = viewportWidth / 2; // Center horizontally
+        const anchorY = isScrollUp ? 100 : viewportHeight - 100; // Top or bottom of screen
+        
+        // Create the scroll instruction text
+        const scrollText = isScrollUp ? 'Scroll Up' : 'Scroll Down';
+        
+        // Use the same drawCommentBox method for consistent styling
+        this.drawCommentBox(anchorX, anchorY, scrollText);
+        
+        // Show next step cue
+        this.showNextStepCue();
     }
 
     clearCanvas() {
@@ -766,6 +836,7 @@ class BubbleApp {
         console.log('Clearing highlighting boxes...');
         this.clearCanvas();
         this.highlightingBoxes = [];
+        this.currentTask = null; // Clear current task when clearing highlighting
         // Border is always visible now, no need to hide it
         
         // Don't show prompt box after first use - it should stay hidden
@@ -806,6 +877,18 @@ class BubbleApp {
             e.preventDefault();
             this.toggleClickthrough();
         }
+        
+        // Ctrl+Shift+0 - Mark current step as success and move to next
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '0') {
+            e.preventDefault();
+            this.markStepSuccess();
+        }
+        
+        // Ctrl+Shift+1 - Mark current step as failure and retry
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '1') {
+            e.preventDefault();
+            this.markStepFailure();
+        }
     }
 
     async handleClearAndRescreenshot() {
@@ -820,6 +903,7 @@ class BubbleApp {
         
         console.log('Starting new workflow...');
         this.clearHighlightingBoxes();
+        this.taskHistory = []; // Reset history for new workflow
 
         
         // For global shortcut, we need to handle the case where there's no current prompt
@@ -842,11 +926,6 @@ class BubbleApp {
         }
     }
 
-    handleSettings() {
-        // Toggle settings panel or show settings
-        this.showStatusMessage('Settings panel coming soon', 'info');
-    }
-
     handleInputFocus() {
         this.promptBar.style.transform = 'scale(1.02)';
     }
@@ -857,9 +936,12 @@ class BubbleApp {
 
     showLoading(show) {
         if (show) {
-            this.loadingIndicator.classList.add('show');
+            this.loadingIndicator.style.display = 'flex';
+            this.loadingIndicator.style.opacity = '1';
+            this.hideNextStepCue();
         } else {
-            this.loadingIndicator.classList.remove('show');
+            this.loadingIndicator.style.display = 'none';
+            this.loadingIndicator.style.opacity = '0';
         }
     }
 
@@ -871,6 +953,49 @@ class BubbleApp {
             this.statusMessage.classList.remove('show');
         }, 3000);
     }
+    
+    showCompletionNotification(message) {
+        // Show a special completion notification
+        this.statusMessage.textContent = message;
+        this.statusMessage.className = `status-message show completed`;
+        
+        // Play completion sound if available
+        this.playCompletionSound();
+        
+        // Keep the completion message visible longer
+        setTimeout(() => {
+            this.statusMessage.classList.remove('show');
+        }, 5000); // 5 seconds for completion notification
+        
+        console.log('Completion notification shown:', message);
+        this.hideNextStepCue();
+    }
+    
+    playCompletionSound() {
+        try {
+            // Create a simple completion sound using Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+            oscillator.frequency.setValueAtTime(1200, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+            
+            console.log('Completion sound played');
+        } catch (error) {
+            console.log('Could not play completion sound:', error);
+        }
+    }
 
     updateProcessingStatus(status) {
         const loadingText = this.loadingIndicator.querySelector('.loading-text');
@@ -878,11 +1003,108 @@ class BubbleApp {
             loadingText.textContent = status;
         }
     }
+
+    showNextStepCue() {
+        const cue = document.getElementById('nextStepCue');
+        const loader = document.getElementById('loadingIndicator');
+        if (cue) {
+            cue.style.display = 'flex';
+            cue.style.opacity = '1';
+        }
+        if (loader) {
+            loader.style.display = 'none';
+        }
+    }
+
+    hideNextStepCue() {
+        const cue = document.getElementById('nextStepCue');
+        if (cue) {
+            cue.style.opacity = '0';
+            setTimeout(() => { cue.style.display = 'none'; }, 200);
+        }
+        // Always show loader when hiding cue (if processing)
+        const loader = document.getElementById('loadingIndicator');
+        if (loader && this.isProcessing) {
+            loader.style.display = 'flex';
+        }
+    }
+
+    markStepSuccess() {
+        console.log('markStepSuccess called');
+        console.log('Current task:', this.currentTask);
+        console.log('Is processing:', this.isProcessing);
+        
+        if (!this.currentTask || this.isProcessing) {
+            console.log('No current task or already processing - returning early');
+            return;
+        }
+        
+        console.log('Marking step as success:', this.currentTask);
+        
+        // Add current task to history with success status
+        this.taskHistory.push({
+            step: this.currentTask.step,
+            action: this.currentTask.action,
+            status: 'success'
+        });
+        
+        console.log('Updated task history:', this.taskHistory);
+        
+        // Clear current highlighting and start processing next step
+        this.clearHighlightingBoxes();
+        this.hideNextStepCue();
+        this.startNextStep();
+    }
+    
+    markStepFailure() {
+        if (!this.currentTask || this.isProcessing) {
+            console.log('No current task or already processing');
+            return;
+        }
+        
+        console.log('Marking step as failure:', this.currentTask);
+        
+        // Add current task to history with failure status
+        this.taskHistory.push({
+            step: this.currentTask.step,
+            action: this.currentTask.action,
+            status: 'failure'
+        });
+        
+        // Clear current highlighting and start processing retry
+        this.clearHighlightingBoxes();
+        this.hideNextStepCue();
+        this.retryCurrentStep();
+    }
+    
+    startNextStep() {
+        console.log('startNextStep called');
+        console.log('Starting next step with history:', this.taskHistory);
+        this.isProcessing = true;
+        this.showLoading(true);
+        console.log('About to call startScreenshotWorkflow');
+        this.startScreenshotWorkflow();
+    }
+    
+    retryCurrentStep() {
+        console.log('Retrying current step with history:', this.taskHistory);
+        this.isProcessing = true;
+        this.showLoading(true);
+        this.startScreenshotWorkflow();
+    }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new BubbleApp();
+    console.log('BubbleApp: DOM loaded, initializing app...');
+    const app = new BubbleApp();
+    console.log('BubbleApp: App initialized successfully');
+    
+    // Test IPC communication on startup
+    setTimeout(() => {
+        console.log('BubbleApp: Testing IPC communication...');
+        ipcRenderer.send('test-renderer-ready');
+    }, 1000);
 });
 
 // Handle window focus/blur for better UX
