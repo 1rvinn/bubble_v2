@@ -4,9 +4,12 @@ from dotenv import load_dotenv
 import time
 import httpx
 from httpx import TimeoutException, ConnectError, ReadTimeout, WriteTimeout
+import sys
 
 load_dotenv()
 HF_TOKEN = os.getenv("HF_TOKEN")
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 # Create client once at module level with timeout settings
 print('[OMNI INIT] Initializing Omni API client...')
