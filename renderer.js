@@ -672,22 +672,22 @@ class BubbleApp {
         const screenWidth = this.screenWidth || window.screen.width;
         const screenHeight = this.screenHeight || window.screen.height;
         const windowBounds = this.windowBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
-        const actualWindowWidth = windowBounds.width;
-        const actualWindowHeight = windowBounds.height;
-        const actualWindowX = windowBounds.x;
-        const actualWindowY = windowBounds.y;
-        const scaleX = viewportWidth / actualWindowWidth;
-        const scaleY = viewportHeight / actualWindowHeight;
-        // Convert from screen percentages to window coordinates
-        const windowX = Math.round(x * screenWidth - actualWindowX);
-        const windowY = Math.round(y * screenHeight - actualWindowY);
-        const windowWidth = Math.round(width * screenWidth);
-        const windowHeight = Math.round(height * screenHeight);
+        // Calculate the absolute screen coordinates
+        const absScreenX = x * screenWidth;
+        const absScreenY = y * screenHeight;
+        const absScreenWidth = width * screenWidth;
+        const absScreenHeight = height * screenHeight;
+        // Calculate the position relative to the overlay window
+        const relX = absScreenX - windowBounds.x;
+        const relY = absScreenY - windowBounds.y;
+        // Calculate scaling factors between window and viewport
+        const scaleX = viewportWidth / windowBounds.width;
+        const scaleY = viewportHeight / windowBounds.height;
         // Scale to viewport
-        const scaledX = Math.round(windowX * scaleX);
-        const scaledY = Math.round(windowY * scaleY);
-        const scaledWidth = Math.round(windowWidth * scaleX);
-        const scaledHeight = Math.round(windowHeight * scaleY);
+        const scaledX = Math.round(relX * scaleX);
+        const scaledY = Math.round(relY * scaleY);
+        const scaledWidth = Math.round(absScreenWidth * scaleX);
+        const scaledHeight = Math.round(absScreenHeight * scaleY);
         // Center-top of the element
         const anchorX = scaledX + scaledWidth / 2;
         const anchorY = scaledY;

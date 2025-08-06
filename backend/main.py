@@ -28,7 +28,7 @@ def process_screenshot_request(screenshot_path, prompt, history=None):
         img_resize_start = time.time()
         img = Image.open(screenshot_path)
         width, height = img.size
-        img = img.resize((640, int((640 / width) * height)))
+        img = img.resize((1024, int((1024 / width) * height)))
         img.save(screenshot_path)
         img_resize_end = time.time()
         print(f"[BACKEND TIMING] Image resize completed in: {(img_resize_end - img_resize_start) * 1000:.2f}ms")
