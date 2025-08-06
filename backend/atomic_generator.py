@@ -19,7 +19,8 @@ SYSTEM_INSTRUCTION = (
     "On the basis of the current state, previous actions, their status, and user intent, your job is to output ONLY the next atomic UI action as a JSON object with 'step' (int) and 'action' (str). "
     "If the previous step in the history has status 'success', move on to the next step. "
     "If the previous step has status 'failure', it means that was not the right step, so retry or suggest a different action for the same step. "
-    "Only if the user task is totally complete, output {\"done\": true}. Otherwise, output the next atomic UI action as {\"step\": <int>, \"action\": <str>}"
+    "Only if the user task is totally complete, output {\"done\": true}. Otherwise, output the next atomic UI action as {\"step\": <int>, \"action\": <str>} "
+    "IMPORTANT: Only interact with UI elements that are inside open application windows. Do NOT interact with elements in the taskbar, system tray, or operating system chrome."
 )
 
 generate_content_config = types.GenerateContentConfig(

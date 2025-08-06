@@ -354,6 +354,18 @@ class BubbleApp {
                 this.windowContentBounds = displayInfo.window.contentBounds;
                 console.log('Window bounds:', this.windowBounds);
                 console.log('Window content bounds:', this.windowContentBounds);
+                
+                // Log the difference between bounds and content bounds for debugging
+                if (this.windowBounds && this.windowContentBounds) {
+                    const titleBarHeight = this.windowContentBounds.y - this.windowBounds.y;
+                    console.log('Title bar height:', titleBarHeight);
+                    console.log('Bounds difference:', {
+                        x: this.windowContentBounds.x - this.windowBounds.x,
+                        y: this.windowContentBounds.y - this.windowBounds.y,
+                        width: this.windowBounds.width - this.windowContentBounds.width,
+                        height: this.windowBounds.height - this.windowContentBounds.height
+                    });
+                }
             }
             
             return displayInfo;
@@ -579,9 +591,25 @@ class BubbleApp {
         if (data.status === 'completed') {
             console.log('Task completed - showing completion notification');
             this.showCompletionNotification(data.message || 'Task completed successfully!');
-            // Clear history when task is completed
+            
+            // Clear history and current task
             this.taskHistory = [];
             this.currentTask = null;
+            
+            // Reset the workflow state
+            this.initialPromptEntered = false;
+            this.currentPrompt = '';
+            if (this.promptInput) {
+                this.promptInput.value = ''; // Clear the input field
+            }
+            
+            // Show the prompt box again after a short delay (after notification is shown)
+            setTimeout(() => {
+                this.promptBoxShown = false; // Reset this so showPromptBox will work
+                this.showPromptBox();
+                this.focusInput(); // Focus the input for immediate typing
+            }, 1000);
+            
             return;
         }
 
@@ -671,18 +699,23 @@ class BubbleApp {
         const viewportHeight = this.viewportHeight || window.innerHeight;
         const screenWidth = this.screenWidth || window.screen.width;
         const screenHeight = this.screenHeight || window.screen.height;
-        const windowBounds = this.windowBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
+        
+        // Use content bounds instead of window bounds to account for window decorations
+        const contentBounds = this.windowContentBounds || this.windowBounds || { x: 0, y: 0, width: screenWidth, height: screenHeight };
+        
         // Calculate the absolute screen coordinates
         const absScreenX = x * screenWidth;
         const absScreenY = y * screenHeight;
         const absScreenWidth = width * screenWidth;
         const absScreenHeight = height * screenHeight;
-        // Calculate the position relative to the overlay window
-        const relX = absScreenX - windowBounds.x;
-        const relY = absScreenY - windowBounds.y;
-        // Calculate scaling factors between window and viewport
-        const scaleX = viewportWidth / windowBounds.width;
-        const scaleY = viewportHeight / windowBounds.height;
+        
+        // Calculate the position relative to the content area (excluding window decorations)
+        const relX = absScreenX - contentBounds.x;
+        const relY = absScreenY - contentBounds.y;
+        
+        // Calculate scaling factors between window content area and viewport
+        const scaleX = viewportWidth / contentBounds.width;
+        const scaleY = viewportHeight / contentBounds.height;
         // Scale to viewport
         const scaledX = Math.round(relX * scaleX);
         const scaledY = Math.round(relY * scaleY);
@@ -958,9 +991,6 @@ class BubbleApp {
         // Show a special completion notification
         this.statusMessage.textContent = message;
         this.statusMessage.className = `status-message show completed`;
-        
-        // Play completion sound if available
-        this.playCompletionSound();
         
         // Keep the completion message visible longer
         setTimeout(() => {

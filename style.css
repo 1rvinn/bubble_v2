@@ -409,22 +409,9 @@ body {
     font-size: 16px;
     padding: 16px 24px;
     box-shadow: 0 4px 12px rgba(0, 200, 0, 0.3);
-    animation: completionPulse 2s ease-in-out;
-}
-
-@keyframes completionPulse {
-    0% {
-        transform: scale(1);
-        box-shadow: 0 4px 12px rgba(0, 200, 0, 0.3);
-    }
-    50% {
-        transform: scale(1.05);
-        box-shadow: 0 6px 20px rgba(0, 200, 0, 0.5);
-    }
-    100% {
-        transform: scale(1);
-        box-shadow: 0 4px 12px rgba(0, 200, 0, 0.3);
-    }
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
 }
 
 /* Responsive design */

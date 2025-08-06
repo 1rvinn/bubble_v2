@@ -128,6 +128,21 @@ def process_screenshot_request(screenshot_path, prompt, history=None):
             "highlighting_boxes": []
         }
 
+def tag_history(history, success):
+    """Tag the last step in history with success or failure."""
+    if history:
+        history[-1]['status'] = 'success' if success else 'failure'
+    return history
+
+def update_history_with_key_combination(data, history):
+    """Update history based on key combination in the received data."""
+    key_combination = data.get('key_combination')
+    if key_combination == 'Ctrl+Shift+0':
+        history = tag_history(history, success=False)
+    elif key_combination == 'Ctrl+Shift+1':
+        history = tag_history(history, success=True)
+    return history
+
 def main():
     """
     Main function to handle IPC communication
@@ -142,7 +157,10 @@ def main():
                     screenshot_path = data.get('screenshot_path')
                     prompt = data.get('prompt', '')
                     history = data.get('history', [])  # Get history with status
-                    
+
+                    # Update history based on key combination
+                    history = update_history_with_key_combination(data, history)
+
                     if not screenshot_path or not os.path.exists(screenshot_path):
                         result = {
                             "status": "error",
@@ -188,4 +206,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+
