@@ -1,20 +1,16 @@
 from gradio_client import Client
 import os
-from dotenv import load_dotenv
 import time
 import httpx
 from httpx import TimeoutException, ConnectError, ReadTimeout, WriteTimeout
 import sys
-
-load_dotenv()
-HF_TOKEN = os.getenv("HF_TOKEN")
 
 sys.stdout.reconfigure(encoding='utf-8')
 
 # Create client once at module level with timeout settings
 print('[OMNI INIT] Initializing Omni API client...')
 try:
-    client = Client("1rvinn/bubble_omni", hf_token=HF_TOKEN)
+    client = Client("http://127.0.0.1:7860/")
     # Set longer timeout for the client
     client.timeout = 180  # 3 minutes timeout
     print('[OMNI INIT] Omni API client initialized successfully')
